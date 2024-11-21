@@ -19,9 +19,9 @@ const CharacterControl = () => {
   const rbContainer = useRef();
 
   const { WALK_SPEED, RUN_SPEED, SENS } = useControls("characterControls", {
-    WALK_SPEED: { value: 1, min: 0.1, max: 2, step: 0.1 },
+    WALK_SPEED: { value: 1.5, min: 0.1, max: 2, step: 0.1 },
     RUN_SPEED: { value: 3, min: 2, max: 5, step: 0.1 },
-    SENS: { value: 0.5, min: 0.01, max: 1, step: 0.1 },
+    SENS: { value: 0.002, min: 0.001, max: 0.01, step: 0.001 },
   });
 
   const [, getkeys] = useKeyboardControls();
@@ -31,43 +31,79 @@ const CharacterControl = () => {
   useFrame(({ camera }) => {
     //RigidBody movement
     if (rb.current) {
-      const vel = rb.current.linvel();
-      let movement = {
-        x: 0,
-        z: 0,
+      const speed = getkeys().run ? RUN_SPEED : WALK_SPEED;
+      const movementInput = {
+        forward: getkeys().forward ? 1 : 0,
+        backward: getkeys().backward ? -1 : 0,
+        rightward: getkeys().rightward ? 1 : 0,
+        leftward: getkeys().leftward ? -1 : 0,
+        jump: getkeys().jump ? 2 : 0,
       };
-      let speed = getkeys().run ? RUN_SPEED : WALK_SPEED;
-      if (getkeys().forward) {
-        movement.z = 1;
-      }
-      if (getkeys().backward) {
-        movement.z = -1;
-      }
-      if (getkeys().rightward) {
-        movement.x = -1;
-      }
-      if (getkeys().leftward) {
-        movement.x = 1;
+
+      // Calculate the container's forward and rightward directions
+      const containerRotation = container.current.rotation.y;
+      const forwardVector = new THREE.Vector3(
+        Math.sin(containerRotation),
+        0,
+        Math.cos(containerRotation)
+      );
+      const rightVector = new THREE.Vector3(
+        -Math.sin(containerRotation + Math.PI / 2),
+        0,
+        -Math.cos(containerRotation + Math.PI / 2)
+      );
+
+      // Calculate movement vector
+      const movementVector = new THREE.Vector3()
+        .add(
+          forwardVector
+            .clone()
+            .multiplyScalar(movementInput.forward + movementInput.backward)
+        )
+        .add(
+          rightVector
+            .clone()
+            .multiplyScalar(movementInput.rightward + movementInput.leftward)
+        );
+
+      // Normalize and scale by speed
+      if (movementVector.length() > 0) {
+        movementVector.normalize().multiplyScalar(speed);
       }
 
-      if (movement.z !== 0 || movement.x !== 0) {
-        vel.z = movement.z * speed;
-        vel.x = movement.x * speed;
-      }
-      rb.current.setLinvel(vel, true);
+      // Apply linear velocity to the rigid body
+      rb.current.setLinvel(
+        {
+          x: movementVector.x,
+          y: rb.current.linvel().y,
+          z: movementVector.z,
+        },
+        true
+      );
     }
-    //Rotation
-    console.log(mouse);
 
     //CAM
+    container.current.rotation.y += -mouse.x * SENS;
+
     if (cameraPosition.current) {
+      cameraPosition.current.position.y = THREE.MathUtils.lerp(
+        cameraPosition.current.position.y,
+        (cameraPosition.current.position.y += mouse.y * 5 * SENS),
+        0.1
+      );
       cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
       camera.position.copy(cameraWorldPosition.current);
     }
 
     if (camTarget.current) {
+      camTarget.current.position.y = THREE.MathUtils.lerp(
+        camTarget.current.position.y,
+        (camTarget.current.position.y += -mouse.y * 20 * SENS),
+        0.1
+      );
       camTarget.current.getWorldPosition(camWorldlookAtPosition.current);
       camLookAt.current.copy(camWorldlookAtPosition.current);
+
       camera.lookAt(camLookAt.current);
     }
   });

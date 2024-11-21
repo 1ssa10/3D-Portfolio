@@ -17,7 +17,7 @@ const Map = () => {
   return (
     <>
       <RigidBody colliders={"cuboid"} friction={0}>
-        <Box args={[1, 1, 1]} position={[-10, 0, 0]}>
+        <Box args={[1, 1, 1]} position={[0, 0, 0]}>
           <meshStandardMaterial map={PurpleTexture} />
         </Box>
       </RigidBody>
