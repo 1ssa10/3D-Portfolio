@@ -28,7 +28,7 @@ function App() {
       >
         <Canvas
           className="canvas-container"
-          // onMouseDown={(e) => e.target.requestPointerLock()}
+          onMouseDown={(e) => e.target.requestPointerLock()}
         >
           <Perf position="top-left" minimal />
           <Environment background files={"./sky.hdr"} />

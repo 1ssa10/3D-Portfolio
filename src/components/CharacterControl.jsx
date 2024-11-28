@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Player from "./Player";
 import { CapsuleCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
@@ -16,7 +16,7 @@ const CharacterControl = () => {
   const cameraWorldPosition = useRef(new THREE.Vector3());
   const camWorldlookAtPosition = useRef(new THREE.Vector3());
   const camLookAt = useRef(new THREE.Vector3());
-  const rbContainer = useRef();
+  const canJump = useRef(false);
 
   const { WALK_SPEED, RUN_SPEED, SENS } = useControls("characterControls", {
     WALK_SPEED: { value: 1.5, min: 0.1, max: 2, step: 0.1 },
@@ -26,7 +26,7 @@ const CharacterControl = () => {
 
   const [, getkeys] = useKeyboardControls();
 
-  let mouse = useMouseMovement();
+  const mouse = useMouseMovement();
 
   useFrame(({ camera }) => {
     //RigidBody movement
@@ -37,10 +37,9 @@ const CharacterControl = () => {
         backward: getkeys().backward ? -1 : 0,
         rightward: getkeys().rightward ? 1 : 0,
         leftward: getkeys().leftward ? -1 : 0,
-        jump: getkeys().jump ? 2 : 0,
       };
 
-      // Calculate the container's forward and rightward directions
+      // Calculate forward and rightward directions
       const containerRotation = container.current.rotation.y;
       const forwardVector = new THREE.Vector3(
         Math.sin(containerRotation),
@@ -80,53 +79,114 @@ const CharacterControl = () => {
         },
         true
       );
+
+      // Jump
+      // console.log(canJump);
+      if (getkeys().jump && canJump.current) {
+        if (
+          Math.round(rb.current.linvel().y) === 0 &&
+          canJump.current === true
+        ) {
+          rb.current.applyImpulse({ x: 0, y: 1, z: 0 }, true);
+          canJump.current = false;
+        }
+      }
     }
 
     //CAM
-    container.current.rotation.y += -mouse.x * SENS;
+
+    if (!mouse.current) return;
+    const { x, y } = mouse.current;
+    container.current.rotation.y += -x * SENS;
 
     if (cameraPosition.current) {
-      cameraPosition.current.position.y = THREE.MathUtils.lerp(
-        cameraPosition.current.position.y,
-        (cameraPosition.current.position.y += mouse.y * 5 * SENS),
-        0.1
-      );
+      // cam position on y according to the movemovement  between 3 and 0.2
+      if (cameraPosition.current.position.z === -2) {
+        // console.log(cameraPosition.current.position.z);
+        cameraPosition.current.position.y = THREE.MathUtils.clamp(
+          THREE.MathUtils.lerp(
+            cameraPosition.current.position.y,
+            (cameraPosition.current.position.y += y * 5 * SENS),
+            0.1
+          ),
+          0.2,
+          3
+        );
+      }
+      // cam movement on z when the cam is on the edges
+      if (cameraPosition.current.position.y === 3) {
+        cameraPosition.current.position.z = THREE.MathUtils.clamp(
+          THREE.MathUtils.lerp(
+            cameraPosition.current.position.z,
+            (cameraPosition.current.position.z += y * 5 * SENS),
+            0.1
+          ),
+          -2,
+          0
+        );
+      }
+      //  same thing but inverted since the mousemovement will be the opposite
+      if (cameraPosition.current.position.y === 0.2) {
+        cameraPosition.current.position.z = THREE.MathUtils.clamp(
+          THREE.MathUtils.lerp(
+            cameraPosition.current.position.z,
+            (cameraPosition.current.position.z -= y * 5 * SENS),
+            0.1
+          ),
+          -2,
+          0
+        );
+      }
+
+      // console.log(cameraPosition.current.position.y);
       cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
       camera.position.copy(cameraWorldPosition.current);
     }
-
+    // repositioning the camera target according to the mouse
     if (camTarget.current) {
-      camTarget.current.position.y = THREE.MathUtils.lerp(
-        camTarget.current.position.y,
-        (camTarget.current.position.y += -mouse.y * 20 * SENS),
-        0.1
+      camTarget.current.position.y = THREE.MathUtils.clamp(
+        THREE.MathUtils.lerp(
+          camTarget.current.position.y,
+          (camTarget.current.position.y += -y * 20 * SENS),
+          0.1
+        ),
+        -12,
+        15
       );
+
       camTarget.current.getWorldPosition(camWorldlookAtPosition.current);
       camLookAt.current.copy(camWorldlookAtPosition.current);
 
       camera.lookAt(camLookAt.current);
     }
+    mouse.current.x = 0;
+    mouse.current.y = 0;
   });
+
   return (
     <>
-      <PointerLockControls />
-      <group ref={rbContainer}>
-        <RigidBody
-          colliders={false}
-          ref={rb}
-          lockRotations
-          position={[0, 2, 0]}
-        >
-          <group ref={container} position={[0, 0, 0]}>
-            <group ref={cameraPosition} position={[-0.5, 1.75, -2]} />
-            <group ref={camTarget} position={[-0.5, 1, 10]} />
-            <group ref={character} position={[0, 1, 0]}>
-              <Player />
-              <CapsuleCollider args={[0.7, 0.2]} />
-            </group>
+      <RigidBody
+        colliders={false}
+        ref={rb}
+        lockRotations
+        friction={0}
+        position={[0, 2, 0]}
+        onCollisionEnter={() => {
+          //allow to jump onCollision
+          if (canJump.current === false) {
+            canJump.current = true;
+          }
+        }}
+      >
+        <group ref={container} position={[0, 0, 0]}>
+          <group ref={cameraPosition} position={[-0.5, 1.75, -2]} />
+          <group ref={camTarget} position={[-0.5, 1, 10]} />
+          <group ref={character} position={[0, 1, 0]}>
+            <Player />
+            <CapsuleCollider args={[0.7, 0.2]} />
           </group>
-        </RigidBody>
-      </group>
+        </group>
+      </RigidBody>
     </>
   );
 };
